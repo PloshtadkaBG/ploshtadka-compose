@@ -1,0 +1,6 @@
+[submodule "ploshtadka-users-ms"]
+	path = ploshtadka-users-ms
+	url = git@github.com:PloshtadkaBG/ploshtadka-users-ms.git
+[submodule "ploshtadka-venues-ms"]
+	path = ploshtadka-venues-ms
+	url = git@github.com:PloshtadkaBG/ploshtadka-venues-ms.git
