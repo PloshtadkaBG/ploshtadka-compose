@@ -1,0 +1,24 @@
+services:
+  admin-panel:
+    build:
+      context: ./ploshtadka-admin-panel
+      target: deps          # stop at the deps stage, no build needed
+    command: bun run dev -- --host 0.0.0.0 --port 5173
+    volumes:
+      - ./ploshtadka-admin-panel:/app   # live source mount
+      - /app/node_modules               # anonymous volume so container's node_modules wins over host
+    networks:
+      - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.admin.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.admin.entrypoints=web"
+      # - "traefik.http.middlewares.admin-strip.stripprefix.prefixes=/"
+      # - "traefik.http.routers.admin.middlewares=admin-strip"
+      - "traefik.http.services.admin-svc.loadbalancer.server.port=5173"
+
+      # - "traefik.http.routers.admin-hmr.rule=PathPrefix(`/admin/__vite_hmr`)"
+      # - "traefik.http.routers.admin-hmr.entrypoints=web"
+      # - "traefik.http.middlewares.admin-hmr-strip.stripprefix.prefixes=/admin"
+      # - "traefik.http.routers.admin-hmr.middlewares=admin-hmr-strip"
+      # - "traefik.http.services.admin-svc.loadbalancer.server.port=5173"

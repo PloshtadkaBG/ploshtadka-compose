@@ -4,3 +4,6 @@
 [submodule "ploshtadka-venues-ms"]
 	path = ploshtadka-venues-ms
 	url = git@github.com:PloshtadkaBG/ploshtadka-venues-ms.git
+[submodule "ploshtadka-admin-panel"]
+	path = ploshtadka-admin-panel
+	url = git@github.com:PloshtadkaBG/ploshtadka-admin-panel.git

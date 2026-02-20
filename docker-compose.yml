@@ -1,0 +1,108 @@
+services:
+  traefik:
+    image: traefik
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--api.dashboard=true"
+      - "--api.insecure=true"  # remove in prod
+    ports:
+      - "80:80"
+      - "8080:8080"  # dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - backend
+
+  admin-panel:
+    build: ./ploshtadka-admin-panel
+    networks:
+      - backend
+    environment:
+      VITE_BASENAME: "/admin"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.admin.rule=PathPrefix(`/admin`)"
+      - "traefik.http.routers.admin.entrypoints=web"
+      - "traefik.http.middlewares.admin-strip.stripprefix.prefixes=/admin"
+      - "traefik.http.routers.admin.middlewares=admin-strip"
+      - "traefik.http.services.admin-svc.loadbalancer.server.port=80"
+
+  users-ms:
+    build: ./ploshtadka-users-ms
+    environment:
+      DB_URL: ${DB_URL:-postgres://ploshtadka:ploshtadka@db:5432/ploshtadka}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-120}
+    networks:
+      - backend
+    depends_on:
+      - db
+    labels:
+      - "traefik.enable=true"
+      # no auth
+      - "traefik.http.routers.users-public.rule=PathPrefix(`/auth`) || (Method(`POST`) && PathPrefix(`/users`)) || Method(`OPTIONS`)"
+      - "traefik.http.routers.users-public.entrypoints=web"
+      - "traefik.http.routers.users-public.service=users-ms-svc"
+      # protected
+      - "traefik.http.routers.users-protected.rule=PathPrefix(`/users`) || PathPrefix(`/scopes`)"
+      - "traefik.http.routers.users-protected.entrypoints=web"
+      - "traefik.http.routers.users-protected.middlewares=jwt-auth"
+      - "traefik.http.routers.users-protected.service=users-ms-svc"
+
+      - "traefik.http.middlewares.jwt-auth.forwardauth.address=http://users-ms:8000/auth/verify"
+      - "traefik.http.middlewares.jwt-auth.forwardauth.authResponseHeaders=X-User-Id,X-User-Scopes,X-Username"
+      # service def
+      - "traefik.http.services.users-ms-svc.loadbalancer.server.port=8000"
+
+  venues-ms:
+    build: ./ploshtadka-venues-ms
+    environment:
+      DB_URL: ${DB_URL:-postgres://ploshtadka:ploshtadka@db:5432/ploshtadka}
+      USERS_MS_URL: ${USERS_MS_URL:-http://users-ms:8000}
+    networks:
+      - backend
+    depends_on:
+      - db
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.venues.rule=PathPrefix(`/venues`)"
+      - "traefik.http.routers.venues.entrypoints=web"
+      - "traefik.http.routers.venues.middlewares=jwt-auth"
+      - "traefik.http.services.venues-svc.loadbalancer.server.port=8001"
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ploshtadka
+      POSTGRES_USER: ploshtadka
+      POSTGRES_PASSWORD: ploshtadka
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - backend
+
+  pgadmin:
+    image: dpage/pgadmin4
+    restart: always
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks:
+      - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pgadmin.rule=PathPrefix(`/pgadmin`)"
+      - "traefik.http.routers.pgadmin.entrypoints=web"
+      - "traefik.http.services.pgadmin-svc.loadbalancer.server.port=80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PG_ADMIN_LOGIN:-admin@gmail.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PG_ADMIN_PASSWORD:-admin}
+      SCRIPT_NAME: /pgadmin
+
+volumes:
+  pgdata:
+  pgadmin-data:
+
+networks:
+  backend:
