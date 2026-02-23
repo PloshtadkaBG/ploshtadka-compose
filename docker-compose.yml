@@ -67,10 +67,79 @@ services:
       - db
     labels:
       - "traefik.enable=true"
+      # no auth: read-only venue browsing + OPTIONS preflight
+      - "traefik.http.routers.venues-public.rule=(Method(`GET`) || Method(`OPTIONS`)) && PathPrefix(`/venues`)"
+      - "traefik.http.routers.venues-public.entrypoints=web"
+      - "traefik.http.routers.venues-public.service=venues-svc"
+      - "traefik.http.routers.venues-public.priority=10"
+      # protected: POST / PATCH / DELETE on /venues
       - "traefik.http.routers.venues.rule=PathPrefix(`/venues`)"
       - "traefik.http.routers.venues.entrypoints=web"
       - "traefik.http.routers.venues.middlewares=jwt-auth"
+      - "traefik.http.routers.venues.service=venues-svc"
+      - "traefik.http.routers.venues.priority=1"
+      # service
       - "traefik.http.services.venues-svc.loadbalancer.server.port=8001"
+
+  bookings-ms:
+    build: ./ploshtadka-bookings-ms
+    environment:
+      DB_URL: ${DB_URL:-postgres://ploshtadka:ploshtadka@db:5432/ploshtadka}
+      USERS_MS_URL: ${USERS_MS_URL:-http://users-ms:8000}
+      VENUES_MS_URL: ${VENUES_MS_URL:-http://venues-ms:8001}
+      PAYMENTS_MS_URL: ${PAYMENTS_MS_URL:-http://payments-ms:8003}
+    networks:
+      - backend
+    depends_on:
+      - db
+    labels:
+      - "traefik.enable=true"
+      # no auth: OPTIONS preflight
+      - "traefik.http.routers.bookings-public.rule=Method(`OPTIONS`) && PathPrefix(`/bookings`)"
+      - "traefik.http.routers.bookings-public.entrypoints=web"
+      - "traefik.http.routers.bookings-public.service=bookings-svc"
+      - "traefik.http.routers.bookings-public.priority=10"
+      # protected
+      - "traefik.http.routers.bookings.rule=PathPrefix(`/bookings`)"
+      - "traefik.http.routers.bookings.entrypoints=web"
+      - "traefik.http.routers.bookings.middlewares=jwt-auth"
+      - "traefik.http.routers.bookings.service=bookings-svc"
+      - "traefik.http.routers.bookings.priority=1"
+      - "traefik.http.services.bookings-svc.loadbalancer.server.port=8002"
+
+  payments-ms:
+    build: ./ploshtadka-payments-ms
+    env_file: .env
+    environment:
+      DB_URL: ${DB_URL:-postgres://ploshtadka:ploshtadka@db:5432/ploshtadka}
+      BOOKINGS_MS_URL: ${BOOKINGS_MS_URL:-http://bookings-ms:8002}
+      STRIPE_SUCCESS_URL: ${STRIPE_SUCCESS_URL:-http://localhost/bookings?payment=success}
+      STRIPE_CANCEL_URL: ${STRIPE_CANCEL_URL:-http://localhost/bookings?payment=cancelled}
+      STRIPE_CHECKOUT_EXPIRES_MINUTES: ${STRIPE_CHECKOUT_EXPIRES_MINUTES:-30}
+    networks:
+      - backend
+    depends_on:
+      - db
+    labels:
+      - "traefik.enable=true"
+      # PUBLIC: Stripe webhook — must not require JWT (Stripe cannot provide one)
+      # Priority 20 ensures this matches before the protected catch-all below
+      - "traefik.http.routers.payments-webhook.rule=Method(`POST`) && Path(`/payments/webhook`)"
+      - "traefik.http.routers.payments-webhook.entrypoints=web"
+      - "traefik.http.routers.payments-webhook.service=payments-svc"
+      - "traefik.http.routers.payments-webhook.priority=20"
+      # PUBLIC: OPTIONS preflight
+      - "traefik.http.routers.payments-public.rule=Method(`OPTIONS`) && PathPrefix(`/payments`)"
+      - "traefik.http.routers.payments-public.entrypoints=web"
+      - "traefik.http.routers.payments-public.service=payments-svc"
+      - "traefik.http.routers.payments-public.priority=10"
+      # Protected: all other /payments routes require JWT
+      - "traefik.http.routers.payments.rule=PathPrefix(`/payments`)"
+      - "traefik.http.routers.payments.entrypoints=web"
+      - "traefik.http.routers.payments.middlewares=jwt-auth"
+      - "traefik.http.routers.payments.service=payments-svc"
+      - "traefik.http.routers.payments.priority=1"
+      - "traefik.http.services.payments-svc.loadbalancer.server.port=8003"
 
   db:
     image: postgres:16-alpine

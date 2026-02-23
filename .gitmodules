@@ -7,3 +7,6 @@
 [submodule "ploshtadka-admin-panel"]
 	path = ploshtadka-admin-panel
 	url = git@github.com:PloshtadkaBG/ploshtadka-admin-panel.git
+[submodule "ploshtadka-bookings-ms"]
+	path = ploshtadka-bookings-ms
+	url = git@github.com:PloshtadkaBG/ploshtadka-bookings-ms.git
