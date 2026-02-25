@@ -36,6 +36,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-120}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
     networks:
       - backend
     depends_on:
@@ -90,10 +91,13 @@ services:
       USERS_MS_URL: ${USERS_MS_URL:-http://users-ms:8000}
       VENUES_MS_URL: ${VENUES_MS_URL:-http://venues-ms:8001}
       PAYMENTS_MS_URL: ${PAYMENTS_MS_URL:-http://payments-ms:8003}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
     networks:
       - backend
     depends_on:
       - db
+      - redis
     labels:
       - "traefik.enable=true"
       # no auth: OPTIONS preflight
