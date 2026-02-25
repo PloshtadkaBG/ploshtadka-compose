@@ -35,10 +35,12 @@ services:
       DB_URL: ${DB_URL:-postgres://ploshtadka:ploshtadka@db:5432/ploshtadka}
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-120}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     networks:
       - backend
     depends_on:
       - db
+      - redis
     labels:
       - "traefik.enable=true"
       # no auth
@@ -113,8 +115,8 @@ services:
     environment:
       DB_URL: ${DB_URL:-postgres://ploshtadka:ploshtadka@db:5432/ploshtadka}
       BOOKINGS_MS_URL: ${BOOKINGS_MS_URL:-http://bookings-ms:8002}
-      STRIPE_SUCCESS_URL: ${STRIPE_SUCCESS_URL:-http://localhost/bookings?payment=success}
-      STRIPE_CANCEL_URL: ${STRIPE_CANCEL_URL:-http://localhost/bookings?payment=cancelled}
+      STRIPE_SUCCESS_URL: ${STRIPE_SUCCESS_URL:-http://localhost:3000/bookings?payment=success}
+      STRIPE_CANCEL_URL: ${STRIPE_CANCEL_URL:-http://localhost:3000/bookings?payment=cancelled}
       STRIPE_CHECKOUT_EXPIRES_MINUTES: ${STRIPE_CHECKOUT_EXPIRES_MINUTES:-30}
     networks:
       - backend
@@ -140,6 +142,11 @@ services:
       - "traefik.http.routers.payments.service=payments-svc"
       - "traefik.http.routers.payments.priority=1"
       - "traefik.http.services.payments-svc.loadbalancer.server.port=8003"
+
+  redis:
+    image: redis:7-alpine
+    networks:
+      - backend
 
   db:
     image: postgres:16-alpine

@@ -10,3 +10,6 @@
 [submodule "ploshtadka-bookings-ms"]
 	path = ploshtadka-bookings-ms
 	url = git@github.com:PloshtadkaBG/ploshtadka-bookings-ms.git
+[submodule "ploshtadka-payments-ms"]
+	path = ploshtadka-payments-ms
+	url = git@github.com:PloshtadkaBG/ploshtadka-payments-ms.git
