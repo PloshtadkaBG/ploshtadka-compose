@@ -104,8 +104,8 @@ All services communicate on the `backend` Docker network. No service is directly
 
 | File | Purpose |
 |---|---|
-| `docker-compose.yml` | Production: Nginx-served static builds, all Traefik labels |
-| `docker-compose.dev.yml` | Dev override: volume-mounts source, runs `bun run dev` instead of serving a build |
+| `docker-compose.yml` | Production: built static assets served by bun, all Traefik labels |
+| `docker-compose.dev.yml` | Dev override: volume-mounts source, runs `bun install && bun run dev` (install is required — Docker anonymous volumes don't inherit image node_modules when a parent bind mount is present) |
 
 ```bash
 # Production stack
@@ -114,6 +114,35 @@ docker compose -f docker-compose.yml up
 # Dev stack (live-reload for frontend services)
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
+
+### Kubernetes (`ploshtadka-k8s/`)
+
+Helm umbrella chart. Redis is a chart dependency; Traefik + CloudNativePG are installed separately via `scripts/prerequisites.sh` (they install CRDs that must exist before `helm install`).
+
+| File | Purpose |
+|---|---|
+| `values.yaml` | Shared defaults (image repos, service ports, log levels) |
+| `values.local.yaml` | Minikube: `imagePullPolicy: Never`, domain `localhost` |
+| `values.staging.yaml` | Staging overrides |
+| `values.prod.yaml` | Prod: HA postgres, HPA enabled, TLS |
+| `sealed-secrets/` | Encrypted secrets — safe to commit |
+| `scripts/seal.sh` | Interactive sealed-secret creation/rotation |
+
+```bash
+# Local (Minikube)
+helm dependency update
+helm install ploshtadka . -f values.yaml -f values.local.yaml
+
+# Upgrade (prod — only changed services)
+helm upgrade ploshtadka . -f values.yaml -f values.prod.yaml \
+  --set "users-ms.image.tag=<sha>"
+
+helm rollback ploshtadka   # instant rollback
+```
+
+**Key secrets:** `ploshtadka-db-app` (created by CloudNativePG — URI must use `asyncpg://` scheme, not `postgresql://`), `users-ms-secrets` (SECRET_KEY, GOOGLE_CLIENT_ID), `payments-ms-secrets` (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET).
+
+See `ploshtadka-k8s/README.md` for full prod setup (k3s, DNS, CI image push).
 
 ---
 
@@ -145,4 +174,4 @@ Before making changes:
 ## Logging
 - All backend services use loguru via `app/logging.py` + `setup_logging()` called in `main.py`
 - `LOG_LEVEL` env var controls verbosity (default `INFO`; set `DEBUG` to see cache hit/miss logs)
-- `LOG_LEVEL: ${LOG_LEVEL:-DEBUG}` is set in compose for users-ms and bookings-ms
+- Compose: users-ms and bookings-ms default to `DEBUG`; venues-ms defaults to `INFO`

@@ -6,7 +6,7 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
       - "--api.dashboard=true"
-      - "--api.insecure=true"  # remove in prod
+      - "--api.insecure=true" 
     ports:
       - "80:80"
       - "8080:8080"  # dashboard
@@ -14,6 +14,20 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - backend
+
+  frontend:
+    build:
+      context: ./ploshtadka-frontend
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+    networks:
+      - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.routers.frontend.priority=1"
+      - "traefik.http.services.frontend-svc.loadbalancer.server.port=3000"
 
   admin-panel:
     build: ./ploshtadka-admin-panel
@@ -27,7 +41,7 @@ services:
       - "traefik.http.routers.admin.entrypoints=web"
       - "traefik.http.middlewares.admin-strip.stripprefix.prefixes=/admin"
       - "traefik.http.routers.admin.middlewares=admin-strip"
-      - "traefik.http.services.admin-svc.loadbalancer.server.port=80"
+      - "traefik.http.services.admin-svc.loadbalancer.server.port=3000"
 
   users-ms:
     build: ./ploshtadka-users-ms
@@ -38,6 +52,7 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      FORWARDED_ALLOW_IPS: "*"
     networks:
       - backend
     depends_on:
@@ -45,18 +60,21 @@ services:
       - redis
     labels:
       - "traefik.enable=true"
-      # no auth
-      - "traefik.http.routers.users-public.rule=PathPrefix(`/auth`) || (Method(`POST`) && PathPrefix(`/users`)) || Method(`OPTIONS`)"
-      - "traefik.http.routers.users-public.entrypoints=web"
-      - "traefik.http.routers.users-public.service=users-ms-svc"
-      # protected
-      - "traefik.http.routers.users-protected.rule=PathPrefix(`/users`) || PathPrefix(`/scopes`)"
-      - "traefik.http.routers.users-protected.entrypoints=web"
-      - "traefik.http.routers.users-protected.middlewares=jwt-auth"
-      - "traefik.http.routers.users-protected.service=users-ms-svc"
-
+      # strip /api prefix before forwarding
+      - "traefik.http.middlewares.api-strip.stripprefix.prefixes=/api"
+      # forwardAuth middleware (internal URL — no /api prefix)
       - "traefik.http.middlewares.jwt-auth.forwardauth.address=http://users-ms:8000/auth/verify"
       - "traefik.http.middlewares.jwt-auth.forwardauth.authResponseHeaders=X-User-Id,X-User-Scopes,X-Username"
+      # no auth
+      - "traefik.http.routers.users-public.rule=PathPrefix(`/api/auth`) || (Method(`POST`) && PathPrefix(`/api/users`)) || Method(`OPTIONS`)"
+      - "traefik.http.routers.users-public.entrypoints=web"
+      - "traefik.http.routers.users-public.middlewares=api-strip"
+      - "traefik.http.routers.users-public.service=users-ms-svc"
+      # protected
+      - "traefik.http.routers.users-protected.rule=PathPrefix(`/api/users`) || PathPrefix(`/api/scopes`)"
+      - "traefik.http.routers.users-protected.entrypoints=web"
+      - "traefik.http.routers.users-protected.middlewares=jwt-auth,api-strip"
+      - "traefik.http.routers.users-protected.service=users-ms-svc"
       # service def
       - "traefik.http.services.users-ms-svc.loadbalancer.server.port=8000"
 
@@ -65,6 +83,8 @@ services:
     environment:
       DB_URL: ${DB_URL:-postgres://ploshtadka:ploshtadka@db:5432/ploshtadka}
       USERS_MS_URL: ${USERS_MS_URL:-http://users-ms:8000}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      FORWARDED_ALLOW_IPS: "*"
     networks:
       - backend
     depends_on:
@@ -72,16 +92,17 @@ services:
     labels:
       - "traefik.enable=true"
       # no auth: read-only venue browsing + OPTIONS preflight
-      - "traefik.http.routers.venues-public.rule=(Method(`GET`) || Method(`OPTIONS`)) && PathPrefix(`/venues`)"
+      - "traefik.http.routers.venues-public.rule=(Method(`GET`) || Method(`OPTIONS`)) && PathPrefix(`/api/venues`)"
       - "traefik.http.routers.venues-public.entrypoints=web"
+      - "traefik.http.routers.venues-public.middlewares=api-strip"
       - "traefik.http.routers.venues-public.service=venues-svc"
       - "traefik.http.routers.venues-public.priority=10"
       # protected: POST / PATCH / DELETE on /venues
-      - "traefik.http.routers.venues.rule=PathPrefix(`/venues`)"
+      - "traefik.http.routers.venues.rule=PathPrefix(`/api/venues`)"
       - "traefik.http.routers.venues.entrypoints=web"
-      - "traefik.http.routers.venues.middlewares=jwt-auth"
+      - "traefik.http.routers.venues.middlewares=jwt-auth,api-strip"
       - "traefik.http.routers.venues.service=venues-svc"
-      - "traefik.http.routers.venues.priority=1"
+      - "traefik.http.routers.venues.priority=5"
       # service
       - "traefik.http.services.venues-svc.loadbalancer.server.port=8001"
 
@@ -94,6 +115,7 @@ services:
       PAYMENTS_MS_URL: ${PAYMENTS_MS_URL:-http://payments-ms:8003}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
+      FORWARDED_ALLOW_IPS: "*"
     networks:
       - backend
     depends_on:
@@ -102,16 +124,17 @@ services:
     labels:
       - "traefik.enable=true"
       # no auth: OPTIONS preflight
-      - "traefik.http.routers.bookings-public.rule=Method(`OPTIONS`) && PathPrefix(`/bookings`)"
+      - "traefik.http.routers.bookings-public.rule=Method(`OPTIONS`) && PathPrefix(`/api/bookings`)"
       - "traefik.http.routers.bookings-public.entrypoints=web"
+      - "traefik.http.routers.bookings-public.middlewares=api-strip"
       - "traefik.http.routers.bookings-public.service=bookings-svc"
       - "traefik.http.routers.bookings-public.priority=10"
       # protected
-      - "traefik.http.routers.bookings.rule=PathPrefix(`/bookings`)"
+      - "traefik.http.routers.bookings.rule=PathPrefix(`/api/bookings`)"
       - "traefik.http.routers.bookings.entrypoints=web"
-      - "traefik.http.routers.bookings.middlewares=jwt-auth"
+      - "traefik.http.routers.bookings.middlewares=jwt-auth,api-strip"
       - "traefik.http.routers.bookings.service=bookings-svc"
-      - "traefik.http.routers.bookings.priority=1"
+      - "traefik.http.routers.bookings.priority=5"
       - "traefik.http.services.bookings-svc.loadbalancer.server.port=8002"
 
   payments-ms:
@@ -120,8 +143,9 @@ services:
     environment:
       DB_URL: ${DB_URL:-postgres://ploshtadka:ploshtadka@db:5432/ploshtadka}
       BOOKINGS_MS_URL: ${BOOKINGS_MS_URL:-http://bookings-ms:8002}
-      STRIPE_SUCCESS_URL: ${STRIPE_SUCCESS_URL:-http://localhost:3000/bookings?payment=success}
-      STRIPE_CANCEL_URL: ${STRIPE_CANCEL_URL:-http://localhost:3000/bookings?payment=cancelled}
+      FORWARDED_ALLOW_IPS: "*"
+      STRIPE_SUCCESS_URL: ${STRIPE_SUCCESS_URL:-http://localhost/bookings?payment=success}
+      STRIPE_CANCEL_URL: ${STRIPE_CANCEL_URL:-http://localhost/bookings?payment=cancelled}
       STRIPE_CHECKOUT_EXPIRES_MINUTES: ${STRIPE_CHECKOUT_EXPIRES_MINUTES:-30}
     networks:
       - backend
@@ -131,21 +155,23 @@ services:
       - "traefik.enable=true"
       # PUBLIC: Stripe webhook — must not require JWT (Stripe cannot provide one)
       # Priority 20 ensures this matches before the protected catch-all below
-      - "traefik.http.routers.payments-webhook.rule=Method(`POST`) && Path(`/payments/webhook`)"
+      - "traefik.http.routers.payments-webhook.rule=Method(`POST`) && Path(`/api/payments/webhook`)"
       - "traefik.http.routers.payments-webhook.entrypoints=web"
+      - "traefik.http.routers.payments-webhook.middlewares=api-strip"
       - "traefik.http.routers.payments-webhook.service=payments-svc"
       - "traefik.http.routers.payments-webhook.priority=20"
       # PUBLIC: OPTIONS preflight
-      - "traefik.http.routers.payments-public.rule=Method(`OPTIONS`) && PathPrefix(`/payments`)"
+      - "traefik.http.routers.payments-public.rule=Method(`OPTIONS`) && PathPrefix(`/api/payments`)"
       - "traefik.http.routers.payments-public.entrypoints=web"
+      - "traefik.http.routers.payments-public.middlewares=api-strip"
       - "traefik.http.routers.payments-public.service=payments-svc"
       - "traefik.http.routers.payments-public.priority=10"
       # Protected: all other /payments routes require JWT
-      - "traefik.http.routers.payments.rule=PathPrefix(`/payments`)"
+      - "traefik.http.routers.payments.rule=PathPrefix(`/api/payments`)"
       - "traefik.http.routers.payments.entrypoints=web"
-      - "traefik.http.routers.payments.middlewares=jwt-auth"
+      - "traefik.http.routers.payments.middlewares=jwt-auth,api-strip"
       - "traefik.http.routers.payments.service=payments-svc"
-      - "traefik.http.routers.payments.priority=1"
+      - "traefik.http.routers.payments.priority=5"
       - "traefik.http.services.payments-svc.loadbalancer.server.port=8003"
 
   redis:

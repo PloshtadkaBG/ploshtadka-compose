@@ -13,3 +13,6 @@
 [submodule "ploshtadka-payments-ms"]
 	path = ploshtadka-payments-ms
 	url = git@github.com:PloshtadkaBG/ploshtadka-payments-ms.git
+[submodule "ploshtadka-frontend"]
+	path = ploshtadka-frontend
+	url = git@github.com:PloshtadkaBG/ploshtadka-frontend.git
