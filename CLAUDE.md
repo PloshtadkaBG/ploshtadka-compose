@@ -12,6 +12,7 @@
 | `ploshtadka-venues-ms` | Python/FastAPI | 8001 | `/venues` |
 | `ploshtadka-bookings-ms` | Python/FastAPI | 8002 | `/bookings` |
 | `ploshtadka-payments-ms` | Python/FastAPI | 8003 | `/payments` |
+| `ploshtadka-notifications-ms` | Python/FastAPI | 8004 | `/notifications` |
 | `ploshtadka-frontend` | React/TanStack | — | `/` |
 | `ploshtadka-admin-panel` | React/React Router | — | `/admin` |
 | Traefik | — | 80/8080 | API gateway + dashboard |

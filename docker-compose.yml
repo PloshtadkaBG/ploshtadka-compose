@@ -179,6 +179,35 @@ services:
       - "traefik.http.routers.payments.priority=5"
       - "traefik.http.services.payments-svc.loadbalancer.server.port=8003"
 
+  notifications-ms:
+    build: ./ploshtadka-notifications-ms
+    environment:
+      DB_URL: ${DB_URL:-postgres://ploshtadka:ploshtadka@db:5432/ploshtadka}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-Ploshtadka.BG <noreply@ploshtadka.bg>}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      FORWARDED_ALLOW_IPS: "*"
+    networks:
+      - backend
+    depends_on:
+      - db
+    labels:
+      - "traefik.enable=true"
+      # no auth: OPTIONS preflight
+      - "traefik.http.routers.notifications-public.rule=Method(`OPTIONS`) && PathPrefix(`/api/notifications`)"
+      - "traefik.http.routers.notifications-public.entrypoints=web"
+      - "traefik.http.routers.notifications-public.middlewares=api-strip"
+      - "traefik.http.routers.notifications-public.service=notifications-svc"
+      - "traefik.http.routers.notifications-public.priority=10"
+      # protected
+      - "traefik.http.routers.notifications.rule=PathPrefix(`/api/notifications`)"
+      - "traefik.http.routers.notifications.entrypoints=web"
+      - "traefik.http.routers.notifications.middlewares=jwt-auth,api-strip"
+      - "traefik.http.routers.notifications.service=notifications-svc"
+      - "traefik.http.routers.notifications.priority=5"
+      - "traefik.http.services.notifications-svc.loadbalancer.server.port=8004"
+
   redis:
     image: redis:7-alpine
     networks:
