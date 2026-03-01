@@ -20,6 +20,7 @@ services:
       context: ./ploshtadka-frontend
       args:
         VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+        VITE_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY}
     networks:
       - backend
     labels:
@@ -52,6 +53,10 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      CONTACT_EMAIL: ${CONTACT_EMAIL}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY}
       FORWARDED_ALLOW_IPS: "*"
     networks:
       - backend
